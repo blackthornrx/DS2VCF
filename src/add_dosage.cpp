@@ -29,7 +29,7 @@ const size_t FORMAT = 8;
 const size_t ENTRY_START = FORMAT + 1;
 const char ENTRY_SEP = ':';
 const char PL_SEP = ',';
-const std::string PL = "PL";
+std::string PL = "PL";
 
 
 int main (int argc, char *argv[]) {
@@ -47,6 +47,12 @@ int main (int argc, char *argv[]) {
     // initialize input/ouput streams
     igzstream infile(argv[1]);
     ogzstream outfile(argv[2]);
+
+    bool usePPinsteadOfPL = false;
+    if (argc == 4) {
+        usePPinsteadOfPL = true;
+        PL = std::string("PP");
+    }
 
     // create task queue
     mc::BlockingReaderWriterQueue<std::string> lines(Q_SIZE);
