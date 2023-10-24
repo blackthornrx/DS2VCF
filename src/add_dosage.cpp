@@ -6,6 +6,7 @@
 #include <string>
 #include <thread>
 #include <vector>
+#include <stdio.h>
 
 
 #include "gzstream.h"
@@ -46,7 +47,9 @@ int main (int argc, char *argv[]) {
 
     // initialize input/ouput streams
     igzstream infile(argv[1]);
-    ogzstream outfile(argv[2]);
+    //ogzstream outfile(argv[2]);
+    //don't write out gzipped files since we want bgzip parallel to do this
+    std::ofstream outfile(argv[2]);
 
     bool usePPinsteadOfPL = false;
     if (argc == 4) {
@@ -70,9 +73,10 @@ int main (int argc, char *argv[]) {
         ss_line.setf(std::ios::fixed,std::ios::floatfield);
         ss_line.precision(2);
 
+        long line_ctr = -1;
         while (true) {
             lines.wait_dequeue(line);
-
+            line_ctr++;
             // output any remaining strings and then quit
             if (line.compare(QUIT_STR) == 0) {
                 outfile << ss_line.rdbuf();
@@ -119,20 +123,29 @@ int main (int argc, char *argv[]) {
             // append dosage info to format string
             ss_line << row[FORMAT] << ":DS" << '\t';
 
+             
             // process likelihoods for each sample and convert to dosage
-            for (size_t i = ENTRY_START; i < row.size() - 1; i++) {
+            try {
+                for (size_t i = ENTRY_START; i < row.size() - 1; i++) {
+                    std::stringstream smpl_ss(row[i]);
+
+                    double dose = get_dose(smpl_ss, pl_idx);
+                    ss_line << row[i] << ENTRY_SEP << dose << '\t';
+                }
+                // last entry needs newline isntead of tab
+                size_t i = row.size() - 1;
                 std::stringstream smpl_ss(row[i]);
-
                 double dose = get_dose(smpl_ss, pl_idx);
-                ss_line << row[i] << ENTRY_SEP << dose << '\t';
-            }
-            // last entry needs newline isntead of tab
-            size_t i = row.size() - 1;
-            std::stringstream smpl_ss(row[i]);
-            double dose = get_dose(smpl_ss, pl_idx);
 
-            ss_line << row[i] << ENTRY_SEP << dose << std::endl;
-            outfile << ss_line.rdbuf();
+                ss_line << row[i] << ENTRY_SEP << dose << std::endl;
+                outfile << ss_line.rdbuf();
+            }
+            catch (const std::invalid_argument& e) {
+                fprintf(stderr,"std::invalid_argument caught for line %lu, skipping line: %s\n",line_ctr,line.c_str());
+            }
+            catch (...) { 
+                fprintf(stderr,"non-std::invalid_argument caught for line %lu, skipping line: %s\n",line_ctr,line.c_str());
+            }
             ss_line.str(std::string());
         }
     });
